@@ -2,8 +2,7 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <kittoku.osc.preference.custom.HomeConnectorPreference
         android:key="HOME_CONNECTOR"
-        android:title="Connect"
-        android:widgetLayout="@layout/big_switch" />
+        android:layout="@layout/connect_button" />
 
     <kittoku.osc.preference.custom.HomeHostnamePreference android:key="HOME_HOSTNAME"/>
 
