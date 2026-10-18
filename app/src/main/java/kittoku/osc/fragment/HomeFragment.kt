@@ -1,10 +1,14 @@
 package kittoku.osc.fragment
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.InputType
 import android.view.View
 import android.widget.EditText
@@ -57,29 +61,64 @@ class HomeFragment : PreferenceFragmentCompat() {
         return System.currentTimeMillis() < preferenceManager.sharedPreferences!!.getLong("LICENSE_EXPIRY", 0L)
     }
 
-    private fun sign(days: String): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest((days + SECRET).toByteArray())
-        return bytes.joinToString("") { "%02x".format(it) }.take(8)
+    private fun deviceId(): String {
+        return Settings.Secure.getString(requireContext().contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+    }
+
+    private fun sign(days: String, deadline: String): String {
+        val text = deviceId() + "|" + days + "|" + deadline + "|" + SECRET
+        val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }.take(6)
+    }
+
+    private fun toast(text: String) {
+        Toast.makeText(requireContext(), text, Toast.LENGTH_LONG).show()
+    }
+
+    private fun activate(code: String) {
+        val prefs = preferenceManager.sharedPreferences!!
+        val parts = code.trim().lowercase().split("-")
+        if (parts.size != 3) { toast("Invalid code"); return }
+
+        val days = parts[0].toLongOrNull()
+        val deadlineDay = parts[1].toLongOrNull()
+
+        if (days == null || days <= 0 || deadlineDay == null || sign(parts[0], parts[1]) != parts[2]) {
+            toast("Invalid code")
+            return
+        }
+
+        // deadlineDay = number of days after 2026-01-01
+        val deadlineMs = 1767225600000L + (deadlineDay + 1) * 86400000L
+        if (System.currentTimeMillis() > deadlineMs) {
+            toast("Code expired")
+            return
+        }
+
+        if (prefs.getString("LAST_CODE", "") == code.trim().lowercase()) {
+            toast("Code already used")
+            return
+        }
+
+        val expiry = System.currentTimeMillis() + days * 86400000L
+        prefs.edit().putLong("LICENSE_EXPIRY", expiry).putString("LAST_CODE", code.trim().lowercase()).apply()
+        toast("Activated for $days days. Turn the switch on.")
     }
 
     private fun showCodeDialog() {
         val input = EditText(requireContext())
         input.inputType = InputType.TYPE_CLASS_TEXT
-        input.hint = "30-xxxxxxxx"
+        input.hint = "30-364-xxxxxx"
 
         AlertDialog.Builder(requireContext())
             .setTitle("Activation code")
+            .setMessage("Device ID: " + deviceId())
             .setView(input)
-            .setPositiveButton("OK") { _, _ ->
-                val parts = input.text.toString().trim().split("-")
-                val days = parts.getOrNull(0)?.toLongOrNull()
-                if (parts.size == 2 && days != null && days > 0 && sign(parts[0]) == parts[1].lowercase()) {
-                    val expiry = System.currentTimeMillis() + days * 86400000L
-                    preferenceManager.sharedPreferences!!.edit().putLong("LICENSE_EXPIRY", expiry).apply()
-                    Toast.makeText(requireContext(), "Activated for $days days. Turn the switch on.", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(requireContext(), "Invalid code", Toast.LENGTH_LONG).show()
-                }
+            .setPositiveButton("OK") { _, _ -> activate(input.text.toString()) }
+            .setNeutralButton("Copy ID") { _, _ ->
+                val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("id", deviceId()))
+                toast("Device ID copied")
             }
             .setNegativeButton("Cancel", null)
             .show()
