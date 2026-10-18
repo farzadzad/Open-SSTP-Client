@@ -29,7 +29,7 @@ import java.security.MessageDigest
 
 
 class HomeFragment : PreferenceFragmentCompat() {
-    private val SECRET = "CHANGE_ME_123"
+    private val SECRET = "@@Ff57365736"
 
     private val preparationLauncher = registerForActivityResult(StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
