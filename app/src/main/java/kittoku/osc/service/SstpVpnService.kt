@@ -56,6 +56,8 @@ internal const val NOTIFICATION_RECONNECT_ID = 2
 internal const val NOTIFICATION_DISCONNECT_ID = 3
 internal const val NOTIFICATION_CERTIFICATE_ID = 4
 
+internal const val LICENSE_EXPIRY_KEY = "LICENSE_EXPIRY"
+
 
 internal class SstpVpnService : VpnService() {
     private lateinit var prefs: SharedPreferences
@@ -78,6 +80,10 @@ internal class SstpVpnService : VpnService() {
                 ComponentName(this, SstpTileService::class.java)
             )
         }
+    }
+
+    private fun isLicenseValid(): Boolean {
+        return System.currentTimeMillis() < prefs.getLong(LICENSE_EXPIRY_KEY, 0L)
     }
 
     override fun onCreate() {
@@ -105,6 +111,14 @@ internal class SstpVpnService : VpnService() {
                 controller?.kill(false, null)
 
                 beForegrounded()
+
+                if (!isLicenseValid()) {
+                    notifyError("LICENSE EXPIRED")
+                    setRootState(false)
+                    close()
+                    return START_NOT_STICKY
+                }
+
                 resetReconnectionLife(prefs)
                 if (getBooleanPrefValue(OscPrefKey.LOG_DO_SAVE_LOG, prefs)) {
                     prepareLogWriter()
@@ -134,6 +148,14 @@ internal class SstpVpnService : VpnService() {
     }
 
     private fun initializeClient() {
+        if (!isLicenseValid()) {
+            notifyError("LICENSE EXPIRED")
+            controller?.kill(false, null)
+            controller = null
+            close()
+            return
+        }
+
         controller = Controller(SharedBridge(this)).also {
             it.launchJobMain()
         }
