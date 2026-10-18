@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:paddingStart="40dp"
+    android:paddingEnd="40dp"
+    android:paddingTop="28dp"
+    android:paddingBottom="28dp">
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@android:id/switch_widget"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@null"
+        android:clickable="false"
+        android:focusable="false"
+        android:scaleX="2.5"
+        android:scaleY="2.5" />
+</FrameLayout>
