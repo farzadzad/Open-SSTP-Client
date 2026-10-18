@@ -56,8 +56,6 @@ internal const val NOTIFICATION_RECONNECT_ID = 2
 internal const val NOTIFICATION_DISCONNECT_ID = 3
 internal const val NOTIFICATION_CERTIFICATE_ID = 4
 
-internal const val LICENSE_EXPIRY_KEY = "LICENSE_EXPIRY"
-
 
 internal class SstpVpnService : VpnService() {
     private lateinit var prefs: SharedPreferences
@@ -69,6 +67,7 @@ internal class SstpVpnService : VpnService() {
     private var controller: Controller?  = null
 
     private var jobReconnect: Job? = null
+    private var jobExpiry: Job? = null
 
     private fun setRootState(state: Boolean) {
         setBooleanPrefValue(state, OscPrefKey.ROOT_STATE, prefs)
@@ -80,10 +79,6 @@ internal class SstpVpnService : VpnService() {
                 ComponentName(this, SstpTileService::class.java)
             )
         }
-    }
-
-    private fun isLicenseValid(): Boolean {
-        return System.currentTimeMillis() < prefs.getLong(LICENSE_EXPIRY_KEY, 0L)
     }
 
     override fun onCreate() {
@@ -112,11 +107,25 @@ internal class SstpVpnService : VpnService() {
 
                 beForegrounded()
 
-                if (!isLicenseValid()) {
+                License.applyLocks(prefs)
+
+                if (!License.isValid(prefs)) {
                     notifyError("LICENSE EXPIRED")
                     setRootState(false)
                     close()
                     return START_NOT_STICKY
+                }
+
+                jobExpiry?.cancel()
+                jobExpiry = scope.launch {
+                    try {
+                        delay(License.remainingMs(prefs))
+                        notifyError("LICENSE EXPIRED")
+                        jobReconnect?.cancel()
+                        controller?.disconnect()
+                        controller = null
+                        close()
+                    } catch (_: CancellationException) { }
                 }
 
                 resetReconnectionLife(prefs)
@@ -134,6 +143,8 @@ internal class SstpVpnService : VpnService() {
             }
 
             else -> {
+                jobExpiry?.cancel()
+
                 // ensure that reconnection has been completely canceled or done
                 runBlocking { jobReconnect?.cancelAndJoin() }
 
@@ -148,7 +159,7 @@ internal class SstpVpnService : VpnService() {
     }
 
     private fun initializeClient() {
-        if (!isLicenseValid()) {
+        if (!License.isValid(prefs)) {
             notifyError("LICENSE EXPIRED")
             controller?.kill(false, null)
             controller = null
